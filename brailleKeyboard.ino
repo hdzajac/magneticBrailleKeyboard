@@ -7,7 +7,7 @@ typedef struct {
   int forwardPin;
   int backwardPin;
   int powerPin;
-  int fieldDirection;
+  float fieldDirection;
 } Magnet;
 
 Magnet magnets[magnetsNumber];
@@ -42,31 +42,48 @@ void setup() {
   magnets[1] = m2;
   
   pinMode(checkReadPin,INPUT);
+
+  revertDirection(1);
 }
 
-// the loop routine runs over and over again forever:
 void loop() {
-  // read the input on analog pin 0:
-  digitalWrite(magnets[0].forwardPin,HIGH);
-  digitalWrite(magnets[0].backwardPin,LOW);
   setValue();
-  analogWrite(magnets[0].powerPin,255);
-  int sensorValue = analogRead(checkReadPin);
-  // print out the value you read:
+  
+  sendDirection(0);
+  sendDirection(1);
+  sendPower(1,255);
+  sendPower(0,255);
 
+  
+  int sensorValue = analogRead(checkReadPin);
   Serial.println(sensorValue);
   
-  delay(10);        // delay in between reads for stability
+//  delay(1);        // delay in between reads for stability
 }
 
+// ================================================
+//   Helpers
+// ================================================
 
 void setValue(){
   if(currentValue >= 255 || currentValue <= 0){
     sign = -sign;
   }
-
   currentValue += (5*sign);
 }
+
+void printMagnet(int magnet){
+  Magnet m = magnets[magnet];
+  Serial.print("Magnet: ");
+  Serial.println(magnet);
+  Serial.print("\tforwardPin: ");
+  Serial.println(m.forwardPin);
+  Serial.print("\tbackwardPin: ");
+  Serial.println(m.backwardPin);
+  Serial.print("\t\tvalues: ");
+  Serial.println(m.fieldDirection);
+}
+
 
 // ================================================
 //   Control fucntions
@@ -74,14 +91,14 @@ void setValue(){
 
 // Sending power value to given magnet
 //
-void powerMagnet (int magnet, int value){
+void sendPower (int magnet, int value){
   if (magnet >= magnetsNumber || value < 0 || value > 255){
     return;
   }
   analogWrite(magnets[magnet].powerPin, value);
 }
 
-void setDirection (int magnet) {
+void sendDirection (int magnet) {
   if (magnet >= magnetsNumber){
     return;
   }
@@ -92,14 +109,14 @@ void setDirection (int magnet) {
 
 // Direction should be -0.5 OR 0.5 
 //
-void changePolrisation(int magnet, int fieldDirection){
+void changeDirection(int magnet, int fieldDirection){
   if (magnet >= magnetsNumber){
     return;
   }
   magnets[magnet].fieldDirection = fieldDirection;
 }
 
-void revertPolrisation(int magnet){
+void revertDirection(int magnet){
   if (magnet >= magnetsNumber){
     return;
   }
