@@ -1,3 +1,6 @@
+#include <Wire.h>
+#define addr 0x0D //I2C Address for The HMC5883
+
 int currentValue = 5;
 int sign = 1;
 
@@ -10,15 +13,32 @@ typedef struct {
   float fieldDirection;
 } Magnet;
 
+typedef struct {
+  Magnet m1;
+  Magnet m2;
+} Dot;
+
 Magnet magnets[magnetsNumber];
+Dot dots[6];
 
 const int checkReadPin = 32;
 
 // the setup routine runs once when you press reset:
 void setup() {
+  Wire.begin();
+  Wire.beginTransmission(addr); //start talking
+  Wire.write(0x0B); // Tell the HMC5883 to Continuously Measure
+  Wire.write(0x01); // Set the Register
+  Wire.endTransmission();
+  Wire.beginTransmission(addr); //start talking
+  Wire.write(0x09); // Tell the HMC5883 to Continuously Measure
+  Wire.write(0x1D); // Set the Register
+  Wire.endTransmission();
+  
   // initialize serial communication at 9600 bits per second:
-  Serial.begin(38400);
-
+  Serial.begin(9600);
+  Serial.println("Set up Begin");
+  
   Magnet m1;
   Magnet m2;
 
@@ -30,9 +50,9 @@ void setup() {
     pinMode(m1.powerPin,OUTPUT);
   m1.fieldDirection = 0.5;
 
-  m2.forwardPin = 18;
+  m2.forwardPin = A22;
     pinMode(m2.forwardPin,OUTPUT);
-  m2.backwardPin = 19;
+  m2.backwardPin = A21;
     pinMode(m2.backwardPin,OUTPUT);
   m2.powerPin = 23;
     pinMode(m2.powerPin,OUTPUT);
@@ -40,6 +60,11 @@ void setup() {
   
   magnets[0] = m1;
   magnets[1] = m2;
+
+  Dot d1;
+  d1.m1 = m1;
+  d1.m2 = m2;
+  dots[0] = d1;
   
   pinMode(checkReadPin,INPUT);
 
@@ -47,18 +72,46 @@ void setup() {
 }
 
 void loop() {
+  short x, y, z; //triple axis data
+
   setValue();
+
+  Wire.beginTransmission(addr);
+  Wire.write(0x00); //start with register 3.
+  Wire.endTransmission();
+
+  //Read the data.. 2 bytes for each axis.. 6 total bytes
+  Wire.requestFrom(addr, 6);
+  if (6 <= Wire.available()) {
+    x = Wire.read(); //MSB  x
+    x |= Wire.read() << 8; //LSB  x
+    z = Wire.read(); //MSB  z
+    z |= Wire.read() << 8; //LSB z
+    y = Wire.read(); //MSB y
+    y |= Wire.read() << 8; //LSB y
+  }
+
+  // Show Values
+  Serial.print("X Value: ");
+  Serial.println(x);
+  Serial.print("Y Value: ");
+  Serial.println(y);
+  Serial.print("Z Value: ");
+  Serial.println(z);
+  Serial.println();
   
   sendDirection(0);
   sendDirection(1);
   sendPower(1,255);
   sendPower(0,255);
 
+//  Serial.print("Field strength: ");
+//  Serial.println(readField(0));
   
-  int sensorValue = analogRead(checkReadPin);
-  Serial.println(sensorValue);
+//  int sensorValue = analogRead(checkReadPin);
+//  Serial.println(sensorValue);
   
-//  delay(1);        // delay in between reads for stability
+  delay(10);        // delay in between reads for stability
 }
 
 // ================================================
@@ -122,6 +175,16 @@ void revertDirection(int magnet){
   }
   magnets[magnet].fieldDirection *= -1;
 }
+
+
+// ================================================
+//   Reading Functions
+// ================================================
+
+//int readField(int dot){
+//  return analogRead(dots[dot].sensorPin);
+//}
+
 
 
 
