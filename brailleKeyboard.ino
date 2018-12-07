@@ -76,6 +76,10 @@ void setup() {
   //revertDirection(1);
 }
 
+
+
+
+
 void loop() {
   CompassReading reading;
   reading = readCompass();
@@ -128,6 +132,7 @@ void handleReading(CompassReading reading){
 
 void vibrateMagnet(int magnet){
   unsigned long total = 0;
+  startMagnet(magnet);
   while(total < totalPulseLenght){
     int pulse = 0;
     while (pulse < pulseLenght){
@@ -140,7 +145,7 @@ void vibrateMagnet(int magnet){
     total += pulse;
     revertDirection(magnet);
   }
-  
+  stopMagnet(magnet);
 }
 
 // Sending power value to given magnet
@@ -177,6 +182,21 @@ void revertDirection(int magnet){
   magnets[magnet].fieldDirection *= -1;
 }
 
+void stopMagnet(int magnet){
+  if (magnet >= magnetsNumber){
+    error("index out of bound", "stopMagnet");
+    return;
+  }
+  magnets[magnet].fieldDirection = 0;
+}
+
+void startMagnet(int magnet){
+  if (magnet >= magnetsNumber){
+    error("index out of bound", "stopMagnet");
+    return;
+  }
+  magnets[magnet].fieldDirection = 0.5;
+}
 
 // ================================================
 //   Reading Functions
@@ -201,6 +221,17 @@ CompassReading readCompass(){
   Serial.print(z);
   Serial.println();  
   return reading;
+}
+
+// ================================================
+//   UTILS
+// ================================================
+
+void error(char *message, char *fun){
+  Serial.print("[Error] [");
+  Serial.print(fun);
+  Serial.print("]: ");
+  Serial.println(message);
 }
 
 
