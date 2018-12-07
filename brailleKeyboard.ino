@@ -1,35 +1,37 @@
-#include <QMC5883L.h>
-#include <Wire.h>
-
 int currentValue = 5;
 int sign = 1;
-QMC5883L compass;
-int xAverageReading = -500;
-int yAverageReading = -3000;
-int zAverageReading = 4000;
-int sensitivity = 2000;
-int pulseLenght = 35;
-int totalPulseLenght = 1000;
+int pulseLenght = 20;
+int totalPulseLenght = 500;
+int idleReading = 536;
+int farReading = 3;
+int mediumReading = 8;
+int touchReading = 35;
+
+int farVibrate = 150;
+int mediumVibrate = 200;
+int touchVibrate = 255;
 
 const int magnetsNumber = 2;
+
+typedef struct {
+  int inputPin;
+  int idleVal;
+} Hall;
 
 typedef struct {
   int forwardPin;
   int backwardPin;
   int powerPin;
   float fieldDirection;
+  Hall sensor;
 } Magnet;
+
+
 
 typedef struct {
   Magnet m1;
   Magnet m2;
 } Dot;
-
-typedef struct {
-  int16_t x;
-  int16_t y;
-  int16_t z;
-} CompassReading;
 
 Magnet magnets[magnetsNumber];
 Dot dots[6];
@@ -38,15 +40,17 @@ const int checkReadPin = 32;
 
 // the setup routine runs once when you press reset:
 void setup() {
-  Wire.begin();
   // initialize serial communication at 9600 bits per second:
   Serial.begin(9600);
-  compass.init();
-  compass.setRange(8);
-  
+ 
   Magnet m1;
+  Hall h1;
   Magnet m2;
 
+  h1.inputPin = 31;
+    pinMode(h1.inputPin, INPUT);
+  h1.idleVal = analogRead(h1.inputPin);
+  m1.sensor = h1;
   m1.forwardPin = 28;
     pinMode(m1.forwardPin,OUTPUT);
   m1.backwardPin = 27;
@@ -73,17 +77,21 @@ void setup() {
   
   pinMode(checkReadPin,INPUT);
 
+  
+
   //revertDirection(1);
 }
 
 void loop() {
-  CompassReading reading;
-  reading = readCompass();
-  handleReading(reading);
- 
-  
+//  startMagnet(1);
+//  driveMagnet(1, 255);
+    handleReading(0,readHall(0));
+//  stopMagnet(1);
   delay(10);        // delay in between reads for stability
 }
+
+
+
 
 // ================================================
 //   Helpers
@@ -116,31 +124,52 @@ void printMagnet(int magnet){
 
 // Deciding whether to apply feedback
 //
-void handleReading(CompassReading reading){
-  if(reading.x < (xAverageReading + sensitivity) && reading.x > (xAverageReading - sensitivity)){
-      if(reading.y < (yAverageReading + sensitivity) && reading.y > (yAverageReading - sensitivity)){
-            if(reading.z < (zAverageReading + sensitivity) && reading.z > (zAverageReading - sensitivity)){
-              vibrateMagnet(0);
-            }
-      }
-  } 
+void handleReading(int magnet, int reading){
+  if (magnet >= magnetsNumber){
+    error("index out of bound", "stopMagnet");
+    return;
+  }
+  int base = magnets[magnet].sensor.idleVal;
+  Serial.println(reading);
+  int diff = base - reading;
+  diff = abs(diff);
+  if(diff < farReading){
+    return;
+  }
+  else if (diff < mediumReading){
+    vibrateMagnet(magnet, farVibrate);
+  }
+  else if(diff < touchReading){
+    vibrateMagnet(magnet, mediumVibrate);
+  }
+  else {
+    vibrateMagnet(magnet, touchVibrate);
+  }
 }
 
-void vibrateMagnet(int magnet){
+void vibrateMagnet(int magnet, int value){
   unsigned long total = 0;
+  startMagnet(magnet);
   while(total < totalPulseLenght){
     int pulse = 0;
     while (pulse < pulseLenght){
       unsigned long StartTime = millis();
-      sendDirection(magnet);
-      sendPower(magnet,255);
+      driveMagnet(magnet, value);
       unsigned long CurrentTime = millis();
       pulse += CurrentTime - StartTime;
     }
     total += pulse;
     revertDirection(magnet);
   }
-  
+  stopMagnet(magnet);
+  delay(100);
+}
+
+// running Magnet with given power
+//
+void driveMagnet(int magnet, int value){
+  sendDirection(magnet);
+  sendPower(magnet, value);
 }
 
 // Sending power value to given magnet
@@ -157,6 +186,16 @@ void sendDirection (int magnet) {
     return;
   }
   Magnet m = magnets[magnet];
+//  Serial.print("Forward pin: ");
+//  Serial.print(m.forwardPin);
+//  Serial.print(", ");
+//  Serial.print(m.fieldDirection + 0.5);
+//  Serial.print("Backward pin: ");
+//  Serial.print(m.backwardPin);
+//  Serial.print(", ");
+//  Serial.print(-m.fieldDirection + 0.5);
+
+
   digitalWrite(m.forwardPin, m.fieldDirection + 0.5 );
   digitalWrite(m.backwardPin, -m.fieldDirection + 0.5);
 }
@@ -177,6 +216,21 @@ void revertDirection(int magnet){
   magnets[magnet].fieldDirection *= -1;
 }
 
+void stopMagnet(int magnet){
+  if (magnet >= magnetsNumber){
+    error("index out of bound", "stopMagnet");
+    return;
+  }
+  magnets[magnet].fieldDirection = 0;
+}
+
+void startMagnet(int magnet){
+  if (magnet >= magnetsNumber){
+    error("index out of bound", "stopMagnet");
+    return;
+  }
+  magnets[magnet].fieldDirection = 0.5;
+}
 
 // ================================================
 //   Reading Functions
@@ -186,25 +240,27 @@ void revertDirection(int magnet){
 //  return analogRead(dots[dot].sensorPin);
 //}
 
-CompassReading readCompass(){
-  CompassReading reading;
-  int16_t x,y,z,t;
-  compass.readRaw(&x,&y,&z,&t);
-  reading.x = x;
-  reading.y = y;
-  reading.z = z;
-  Serial.print("x: ");
-  Serial.print(x);
-  Serial.print("    y: ");
-  Serial.print(y);
-  Serial.print("    z: ");
-  Serial.print(z);
-  Serial.println();  
+
+int readHall(int magnet){
+  if (magnet >= magnetsNumber){
+    return 0;
+  }
+  int reading = analogRead(magnets[magnet].sensor.inputPin);
+  Serial.print("Hall effect reading ");
+  Serial.println(reading);
   return reading;
 }
 
+// ================================================
+//   UTILS
+// ================================================
 
-
+void error(char *message, char *fun){
+  Serial.print("[Error] [");
+  Serial.print(fun);
+  Serial.print("]: ");
+  Serial.println(message);
+}
 
 
 
