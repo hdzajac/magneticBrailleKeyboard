@@ -1,15 +1,17 @@
 int currentValue = 5;
 int sign = 1;
-int pulseLenght = 20;
-int totalPulseLenght = 500;
+int pulseLenght = 30;
+int totalPulseLenght = 750;
 int idleReading = 536;
-int farReading = 3;
-int mediumReading = 8;
-int touchReading = 35;
+int farReading = 5;
+int mediumReading = 10;
+int strongReading = 25;
+int touchReading = 50;
+int consecutiveReadings = 5;
 
 int farVibrate = 150;
 int mediumVibrate = 200;
-int touchVibrate = 255;
+int strongVibrate = 255;
 
 const int magnetsNumber = 2;
 
@@ -24,6 +26,7 @@ typedef struct {
   int powerPin;
   float fieldDirection;
   Hall sensor;
+  bool reseting;
 } Magnet;
 
 
@@ -50,7 +53,7 @@ void setup() {
   h1.inputPin = 31;
     pinMode(h1.inputPin, INPUT);
   h1.idleVal = analogRead(h1.inputPin);
-  m1.sensor = h1;
+  m2.sensor = h1;
   m1.forwardPin = 28;
     pinMode(m1.forwardPin,OUTPUT);
   m1.backwardPin = 27;
@@ -66,6 +69,7 @@ void setup() {
   m2.powerPin = 23;
     pinMode(m2.powerPin,OUTPUT);
   m2.fieldDirection = 0.5;
+  m2.reseting = false;
   
   magnets[0] = m1;
   magnets[1] = m2;
@@ -83,11 +87,13 @@ void setup() {
 }
 
 void loop() {
-//  startMagnet(1);
-//  driveMagnet(1, 255);
-    handleReading(0,readHall(0));
-//  stopMagnet(1);
-  delay(10);        // delay in between reads for stability
+//    startMagnet(0);
+//    revertDirection(0);
+//  driveMagnet(0, 255);
+    handleReading(1,readHall(1));
+//  stopMagnet(0);
+//  Serial.println(analogRead(checkReadPin));
+//  delay(10);        // delay in between reads for stability
 }
 
 
@@ -130,21 +136,58 @@ void handleReading(int magnet, int reading){
     return;
   }
   int base = magnets[magnet].sensor.idleVal;
-  Serial.println(reading);
   int diff = base - reading;
   diff = abs(diff);
+  Serial.print(diff);
+    
   if(diff < farReading){
+    if(certain(magnet, 0, farReading)){
+      Serial.println("OUT");
+      if(magnets[magnet].reseting){
+        magnets[magnet].reseting = false;
+      }
+    }
+    stopMagnet(magnet);
     return;
   }
-  else if (diff < mediumReading){
-    vibrateMagnet(magnet, farVibrate);
+  else if (diff < mediumReading && !magnets[magnet].reseting){
+    if(certain(magnet, farReading, mediumReading)){
+      Serial.println("FAR");
+      vibrateMagnet(magnet, strongVibrate);
+    }
   }
-  else if(diff < touchReading){
-    vibrateMagnet(magnet, mediumVibrate);
+  else if(diff < strongReading && !magnets[magnet].reseting){
+    if(certain(magnet, mediumReading, strongReading)){
+      Serial.println("MED");
+      vibrateMagnet(magnet, mediumVibrate);
+    }
+  }
+  else  if(diff < touchReading && !magnets[magnet].reseting){
+    if(certain(magnet, strongReading, touchReading)){
+      Serial.println("STRONG");
+      vibrateMagnet(magnet, strongVibrate);
+    }
   }
   else {
-    vibrateMagnet(magnet, touchVibrate);
+    Serial.println("TOUCH");
+    if (!magnets[magnet].reseting){
+      magnets[magnet].reseting = true;
+    }
+    stopMagnet(magnet);
   }
+}
+
+bool certain (int magnet, int lower, int higher){
+  bool result = true;
+  for (int i = 0; i < consecutiveReadings; i++){
+      int base = magnets[magnet].sensor.idleVal;
+  int diff = base - analogRead(magnets[magnet].sensor.inputPin);
+  diff = abs(diff);
+  if (diff < lower || diff > higher){
+  result = false;    
+  }
+  }
+ return result;
 }
 
 void vibrateMagnet(int magnet, int value){
@@ -162,7 +205,6 @@ void vibrateMagnet(int magnet, int value){
     revertDirection(magnet);
   }
   stopMagnet(magnet);
-  delay(100);
 }
 
 // running Magnet with given power
@@ -222,6 +264,7 @@ void stopMagnet(int magnet){
     return;
   }
   magnets[magnet].fieldDirection = 0;
+  sendDirection(magnet);
 }
 
 void startMagnet(int magnet){
@@ -246,8 +289,8 @@ int readHall(int magnet){
     return 0;
   }
   int reading = analogRead(magnets[magnet].sensor.inputPin);
-  Serial.print("Hall effect reading ");
-  Serial.println(reading);
+//  Serial.print("Hall effect reading ");
+//  Serial.println(reading);
   return reading;
 }
 
