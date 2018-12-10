@@ -1,13 +1,13 @@
-int currentValue = 5;
 int sign = 1;
-int pulseLenght = 30;
-int totalPulseLenght = 750;
+int pulseLenght = 4;
+int totalPulseLenght = 12;
 int idleReading = 536;
 int farReading = 5;
 int mediumReading = 10;
 int strongReading = 25;
-int touchReading = 50;
+int touchReading = 100;
 int consecutiveReadings = 5;
+int maxConsecutivePulses = 200000;
 
 int farVibrate = 150;
 int mediumVibrate = 200;
@@ -26,10 +26,10 @@ typedef struct {
   int powerPin;
   float fieldDirection;
   Hall sensor;
+  int consecutivePulses;
+  unsigned long lastRun;
   bool reseting;
 } Magnet;
-
-
 
 typedef struct {
   Magnet m1;
@@ -38,8 +38,6 @@ typedef struct {
 
 Magnet magnets[magnetsNumber];
 Dot dots[6];
-
-const int checkReadPin = 32;
 
 // the setup routine runs once when you press reset:
 void setup() {
@@ -70,6 +68,8 @@ void setup() {
     pinMode(m2.powerPin,OUTPUT);
   m2.fieldDirection = 0.5;
   m2.reseting = false;
+  m2.lastRun = millis();
+  m2.consecutivePulses = 0;
   
   magnets[0] = m1;
   magnets[1] = m2;
@@ -78,49 +78,19 @@ void setup() {
   d1.m1 = m1;
   d1.m2 = m2;
   dots[0] = d1;
-  
-  pinMode(checkReadPin,INPUT);
 
-  
-
-  //revertDirection(1);
 }
 
 void loop() {
-//    startMagnet(0);
-//    revertDirection(0);
-//  driveMagnet(0, 255);
     handleReading(1,readHall(1));
-//  stopMagnet(0);
-//  Serial.println(analogRead(checkReadPin));
-//  delay(10);        // delay in between reads for stability
+//driveMagnet(1,255);
+//Magnet m = magnets[1];
+//  digitalWrite(m.forwardPin, m.fieldDirection + 0.5 );
+//  digitalWrite(m.backwardPin, -m.fieldDirection + 0.5);
+//  analogWrite(m.powerPin, 255);
 }
 
 
-
-
-// ================================================
-//   Helpers
-// ================================================
-
-void setValue(){
-  if(currentValue >= 255 || currentValue <= 0){
-    sign = -sign;
-  }
-  currentValue += (5*sign);
-}
-
-void printMagnet(int magnet){
-  Magnet m = magnets[magnet];
-  Serial.print("Magnet: ");
-  Serial.println(magnet);
-  Serial.print("\tforwardPin: ");
-  Serial.println(m.forwardPin);
-  Serial.print("\tbackwardPin: ");
-  Serial.println(m.backwardPin);
-  Serial.print("\t\tvalues: ");
-  Serial.println(m.fieldDirection);
-}
 
 
 
@@ -138,8 +108,7 @@ void handleReading(int magnet, int reading){
   int base = magnets[magnet].sensor.idleVal;
   int diff = base - reading;
   diff = abs(diff);
-  Serial.print(diff);
-    
+      
   if(diff < farReading){
     if(certain(magnet, 0, farReading)){
       Serial.println("OUT");
@@ -147,7 +116,6 @@ void handleReading(int magnet, int reading){
         magnets[magnet].reseting = false;
       }
     }
-    stopMagnet(magnet);
     return;
   }
   else if (diff < mediumReading && !magnets[magnet].reseting){
@@ -173,26 +141,24 @@ void handleReading(int magnet, int reading){
     if (!magnets[magnet].reseting){
       magnets[magnet].reseting = true;
     }
-    stopMagnet(magnet);
   }
 }
 
 bool certain (int magnet, int lower, int higher){
   bool result = true;
   for (int i = 0; i < consecutiveReadings; i++){
-      int base = magnets[magnet].sensor.idleVal;
-  int diff = base - analogRead(magnets[magnet].sensor.inputPin);
-  diff = abs(diff);
-  if (diff < lower || diff > higher){
-  result = false;    
-  }
+    int base = magnets[magnet].sensor.idleVal;
+    int diff = base - analogRead(magnets[magnet].sensor.inputPin);
+    diff = abs(diff);
+    if (diff < lower || diff > higher){
+      result = false;    
+    }
   }
  return result;
 }
 
 void vibrateMagnet(int magnet, int value){
   unsigned long total = 0;
-  startMagnet(magnet);
   while(total < totalPulseLenght){
     int pulse = 0;
     while (pulse < pulseLenght){
@@ -205,51 +171,61 @@ void vibrateMagnet(int magnet, int value){
     revertDirection(magnet);
   }
   stopMagnet(magnet);
+  delay(2);
 }
+
+void driveMagnet(int magnet, int value){
+  Magnet* m = &magnets[magnet];
+  digitalWrite(m->forwardPin, m->fieldDirection + 0.5 );
+  digitalWrite(m->backwardPin, -m->fieldDirection + 0.5);
+  analogWrite(m->powerPin, value);
+}
+
+
 
 // running Magnet with given power
 //
-void driveMagnet(int magnet, int value){
-  sendDirection(magnet);
-  sendPower(magnet, value);
-}
-
-// Sending power value to given magnet
-//
-void sendPower (int magnet, int value){
-  if (magnet >= magnetsNumber || value < 0 || value > 255){
-    return;
-  }
-  analogWrite(magnets[magnet].powerPin, value);
-}
-
-void sendDirection (int magnet) {
+void pulseMagnet(int magnet, int value){
   if (magnet >= magnetsNumber){
+    error("index out of bound", "stopMagnet");
     return;
   }
-  Magnet m = magnets[magnet];
-//  Serial.print("Forward pin: ");
-//  Serial.print(m.forwardPin);
-//  Serial.print(", ");
-//  Serial.print(m.fieldDirection + 0.5);
-//  Serial.print("Backward pin: ");
-//  Serial.print(m.backwardPin);
-//  Serial.print(", ");
-//  Serial.print(-m.fieldDirection + 0.5);
-
-
-  digitalWrite(m.forwardPin, m.fieldDirection + 0.5 );
-  digitalWrite(m.backwardPin, -m.fieldDirection + 0.5);
-}
-
-// Direction should be -0.5 OR 0.5 
-//
-void changeDirection(int magnet, int fieldDirection){
-  if (magnet >= magnetsNumber){
-    return;
+  Magnet* m = &magnets[magnet];
+  unsigned long currentTime = millis();
+  unsigned long diff = currentTime - m->lastRun;
+  if(diff < 50){
+    if(m->consecutivePulses < maxConsecutivePulses){
+      m->consecutivePulses++;
+      digitalWrite(m->forwardPin, m->fieldDirection + 0.5 );
+      digitalWrite(m->backwardPin, -m->fieldDirection + 0.5);
+      analogWrite(m->powerPin, value);
+      stopMagnet(magnet);
+      m->lastRun = millis();
+    }
+    else{
+      stopMagnet(magnet);
+      return;
+    }
   }
-  magnets[magnet].fieldDirection = fieldDirection;
+  else if(diff > 4000){
+    m->consecutivePulses = 0;
+    m->lastRun = millis();
+  }
+  else {
+     if(m->consecutivePulses < maxConsecutivePulses){
+        digitalWrite(m->forwardPin, m->fieldDirection + 0.5 );
+        digitalWrite(m->backwardPin, -m->fieldDirection + 0.5);
+        analogWrite(m->powerPin, value);
+        stopMagnet(magnet);
+        if(m->consecutivePulses > 0){
+          m->consecutivePulses -= 1;
+        }
+        m->lastRun = millis();
+     }
+  }
+
 }
+
 
 void revertDirection(int magnet){
   if (magnet >= magnetsNumber){
@@ -263,16 +239,9 @@ void stopMagnet(int magnet){
     error("index out of bound", "stopMagnet");
     return;
   }
-  magnets[magnet].fieldDirection = 0;
-  sendDirection(magnet);
-}
-
-void startMagnet(int magnet){
-  if (magnet >= magnetsNumber){
-    error("index out of bound", "stopMagnet");
-    return;
-  }
-  magnets[magnet].fieldDirection = 0.5;
+  Magnet m = magnets[magnet];
+  digitalWrite(m.forwardPin, 0 );
+  digitalWrite(m.backwardPin, 0);
 }
 
 // ================================================
