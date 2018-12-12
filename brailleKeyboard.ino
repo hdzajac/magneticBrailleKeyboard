@@ -1,6 +1,6 @@
 int singleVibrationLength = 4;
 int totalVibrationLength = 12;
-int totalPulseLength = 10000;
+int totalPulseLength = 746;
 int idleReading = 536;
 int farReading = 5;
 int mediumReading = 10;
@@ -8,12 +8,16 @@ int strongReading = 25;
 int touchReading = 100;
 int consecutiveReadings = 5;
 int restTime = 5000;
-int maxWorkTime = 1000;
+int maxWorkTime = 1500;
 int minTimeBetweenRuns = 300;
 
 int farVibrate = 150;
 int mediumVibrate = 200;
 int strongVibrate = 255;
+  
+int mode = 9; // 0 = reading
+              // 1 = writing
+              // 9 = setup
 
 const int magnetsNumber = 2;
 
@@ -84,16 +88,40 @@ void setup() {
   d1.m1 = m1;
   d1.m2 = m2;
   dots[0] = d1;
-
 }
 
 void loop() {
-    //handleReading(1,readHall(1));
-pulseMagnet(1,255);
-//Magnet m = magnets[1];
-//  digitalWrite(m.forwardPin, m.fieldDirection + 0.5 );
-//  digitalWrite(m.backwardPin, -m.fieldDirection + 0.5);
-//  analogWrite(m.powerPin, 255);
+   int val = -1;
+   if(mode == 9){
+      if (Serial.available()){ // If data is available to read,
+       val = Serial.read(); // read it and store it in val
+       Serial.printf("Received: %d\n", val);
+      }
+      if (val == 1){ // If 1 was receidved
+        mode = 1;
+      }
+      else if (val == 0){
+        mode = 0;
+      }
+      else {
+        return;
+      }
+      Serial.print("waiting in mode: ");
+            Serial.println(mode);
+    delay(10); // Wait 10 milliseconds for next reading
+   }
+   else if (mode == 0){
+      if (Serial.available()){ // If data is available to read,
+       val = Serial.read(); // read it and store it in val
+             Serial.printf("waiting in reading, got: %d\n", val);
+       handleReading(val);
+      }
+
+      delay(10);
+   }
+   else if (mode == 1){
+    handleWriting();
+   }
 }
 
 
@@ -104,9 +132,19 @@ pulseMagnet(1,255);
 //   Control fucntions
 // ================================================
 
+void handleReading(int letter){
+  pulseMagnet(1,255);
+}
+
+void handleWriting(){
+  handleInput(1, readHall(1));
+}
+
+
+
 // Deciding whether to apply feedback
 //
-void handleReading(int magnet, int reading){
+void handleInput(int magnet, int reading){
   if (magnet >= magnetsNumber){
     error("index out of bound", "stopMagnet");
     return;
@@ -117,34 +155,25 @@ void handleReading(int magnet, int reading){
       
   if(diff < farReading){
     if(certain(magnet, 0, farReading)){
-      Serial.println("OUT");
       if(magnets[magnet].reseting){
         magnets[magnet].reseting = false;
       }
     }
     return;
   }
-  else if (diff < mediumReading && !magnets[magnet].reseting){
-    if(certain(magnet, farReading, mediumReading)){
-      Serial.println("FAR");
-      vibrateMagnet(magnet, strongVibrate);
-    }
-  }
-  else if(diff < strongReading && !magnets[magnet].reseting){
-    if(certain(magnet, mediumReading, strongReading)){
-      Serial.println("MED");
-      vibrateMagnet(magnet, mediumVibrate);
-    }
-  }
+//  else if(diff < strongReading && !magnets[magnet].reseting){
+//    if(certain(magnet, mediumReading, strongReading)){
+//      vibrateMagnet(magnet, strongVibrate);
+//    }
+//  }
   else  if(diff < touchReading && !magnets[magnet].reseting){
     if(certain(magnet, strongReading, touchReading)){
-      Serial.println("STRONG");
-      vibrateMagnet(magnet, strongVibrate);
+      pulseMagnet(magnet, strongVibrate);
     }
   }
   else {
-    Serial.println("TOUCH");
     if (!magnets[magnet].reseting){
+      Serial.printf("%d 1 %lu\n", magnet, millis());
       magnets[magnet].reseting = true;
     }
   }
@@ -167,7 +196,7 @@ void vibrateMagnet(int magnet, int value){
     total += pulse;
     revertDirection(magnet);
   }
-  stopMagnet(magnet , "VIBRATE");
+  stopMagnet(magnet);
   delay(2);
 }
 
@@ -179,7 +208,7 @@ void pulseMagnet(int magnet, int value){
     unsigned long CurrentTime = millis();
     total += (CurrentTime - StartTime);
   }
-  stopMagnet(magnet , "PULSE");
+  stopMagnet(magnet);
   delay(2);
 }
 
@@ -190,9 +219,7 @@ void driveMagnet(int magnet, int value){
   if(canRun(magnet)){
     if(m->isRunning == false){
       m->isRunning = true;
-          Serial.println("[DRIVING]");
       if( (millis() - m->lastRun) > minTimeBetweenRuns){
-        Serial.println("Had enough break");
         m->firstRun = millis();
       }
     }
@@ -213,18 +240,15 @@ bool canRun(int magnet){
   }
   if (m->isRunning && millis() - m->firstRun > maxWorkTime){
     m->overheated = true;
-    Serial.println("Stopping" );
-    stopMagnet(magnet, "[CAN RUN]");
+    stopMagnet(magnet);
     return false;
   }
   return true;  
 }
 
-void stopMagnet(int magnet, char fromWhere[]){
+void stopMagnet(int magnet){
   Magnet *m = &magnets[magnet];
   if(m->isRunning){
-    Serial.print("from: ");
-    Serial.println(fromWhere);
     digitalWrite(m->forwardPin, 0 );
     digitalWrite(m->backwardPin, 0);
     m->lastRun = millis();
@@ -259,7 +283,8 @@ void revertDirection(int magnet){
   if (magnet >= magnetsNumber){
     return;
   }
-  magnets[magnet].fieldDirection *= -1;
+  Magnet *m = &magnets[magnet];
+  m->fieldDirection *= -1;
 }
 
 
