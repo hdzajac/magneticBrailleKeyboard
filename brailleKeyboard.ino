@@ -1,6 +1,4 @@
-int singleVibrationLength = 4;
-int totalVibrationLength = 12;
-int totalPulseLength = 746;
+#include <math.h>  
 int idleReading = 536;
 int farReading = 5;
 int mediumReading = 10;
@@ -8,8 +6,18 @@ int strongReading = 25;
 int touchReading = 100;
 int consecutiveReadings = 5;
 int restTime = 5000;
-int maxWorkTime = 1500;
+int maxWorkTime = 3000;
 int minTimeBetweenRuns = 300;
+int vibrationSetLength = 500;
+
+int singleVibrationLength = 4;
+int totalVibrationRepetitions = 3;
+
+int singlePulseLength = 400;
+int totalPulseRepetitions = 1;
+
+int confirmationSinglePulseLength = 30;
+int confirmationPulseRepetitions = 3;
 
 int farVibrate = 150;
 int mediumVibrate = 200;
@@ -37,6 +45,7 @@ typedef struct {
   bool isRunning;
   bool overheated;
   bool reseting;
+  float repellingDirection;
 } Magnet;
 
 typedef struct {
@@ -75,6 +84,7 @@ void setup() {
   m2.powerPin = 23;
     pinMode(m2.powerPin,OUTPUT);
   m2.fieldDirection = 0.5;
+  m2.repellingDirection = 0.5;
   m2.reseting = false;
   m2.lastRun = millis();
   m2.firstRun = millis();
@@ -133,11 +143,21 @@ void loop() {
 // ================================================
 
 void handleReading(int letter){
-  pulseMagnet(1,255);
+  pulseMagnet(1,255, magnets[1].repellingDirection, singlePulseLength, totalPulseRepetitions);
 }
 
 void handleWriting(){
   handleInput(1, readHall(1));
+}
+
+void handleVibration(int magnet, int value){
+  int total = 0;
+  while(total < vibrationSetLength){
+    unsigned long StartTime = millis();
+    vibrateMagnet(magnet, value, singleVibrationLength, totalVibrationRepetitions);
+    unsigned long CurrentTime = millis();
+    total += (CurrentTime - StartTime);
+  }
 }
 
 
@@ -161,20 +181,18 @@ void handleInput(int magnet, int reading){
     }
     return;
   }
-//  else if(diff < strongReading && !magnets[magnet].reseting){
-//    if(certain(magnet, mediumReading, strongReading)){
-//      vibrateMagnet(magnet, strongVibrate);
-//    }
-//  }
   else  if(diff < touchReading && !magnets[magnet].reseting){
     if(certain(magnet, strongReading, touchReading)){
-      pulseMagnet(magnet, strongVibrate);
+      int power = getPower(diff, 0, 100, true);
+      Serial.printf("Power: %d\n", power);
+      pulseMagnet(magnet, power, magnets[magnet].repellingDirection * -1, singlePulseLength, totalPulseRepetitions);
     }
   }
   else {
     if (!magnets[magnet].reseting){
       Serial.printf("%d 1 %lu\n", magnet, millis());
       magnets[magnet].reseting = true;
+      pulseMagnet(magnet, strongVibrate, magnets[magnet].repellingDirection, confirmationSinglePulseLength, confirmationPulseRepetitions);
     }
   }
 }
@@ -183,30 +201,43 @@ void handleInput(int magnet, int reading){
 
 
 
-void vibrateMagnet(int magnet, int value){
-  unsigned long total = 0;
-  while(total < totalVibrationLength){
+void vibrateMagnet(int magnet, int value, int vibrationLength, int repetitions){
+  Magnet *m = &magnets[magnet];
+  for (int i = 0; i < repetitions; i++){
     int pulse = 0;
-    while (pulse < singleVibrationLength){
+    while (pulse < vibrationLength){
       unsigned long StartTime = millis();
       driveMagnet(magnet, value);
       unsigned long CurrentTime = millis();
       pulse += CurrentTime - StartTime;
     }
-    total += pulse;
     revertDirection(magnet);
   }
   stopMagnet(magnet);
   delay(2);
 }
 
-void pulseMagnet(int magnet, int value){
+void pulseMagnet(int magnet, int value, float dir, int pulseLength, int repetitions){
+  setDirection(magnet, dir);
   unsigned long total = 0;
-  while(total < totalPulseLength){
-    unsigned long StartTime = millis();
-    driveMagnet(magnet, value);
-    unsigned long CurrentTime = millis();
-    total += (CurrentTime - StartTime);
+  int runPulse = 1;
+  int alreadyStopped = false;
+  for(int i = 0; i < repetitions; i++){
+    int pulse = 0;
+    while (pulse < pulseLength){
+      unsigned long StartTime = millis();
+      if(runPulse == 1){
+        driveMagnet(magnet, value);
+        alreadyStopped = false;
+      }
+      else if (!alreadyStopped){
+        stopMagnet(magnet);
+        alreadyStopped = true;
+      }
+      unsigned long CurrentTime = millis();
+      pulse += CurrentTime - StartTime;
+    }
+    runPulse *= -1;
   }
   stopMagnet(magnet);
   delay(2);
@@ -275,7 +306,10 @@ bool certain (int magnet, int lower, int higher){
 }
 
 
-
+void updateIdleVal(int magnet){
+  Magnet *m = &magnets[magnet];
+  m->sensor.idleVal = analogRead(m->sensor.inputPin);
+}
 
 
 
@@ -287,6 +321,13 @@ void revertDirection(int magnet){
   m->fieldDirection *= -1;
 }
 
+void setDirection(int magnet, float dir){
+  if (magnet >= magnetsNumber){
+    return;
+  }
+  Magnet *m = &magnets[magnet];
+  m->fieldDirection = dir;
+}
 
 // ================================================
 //   Reading Functions
@@ -318,7 +359,29 @@ void error(char *message, char *fun){
   Serial.println(message);
 }
 
+int getPower(int val,int minVal, int maxVal, bool revert){
+  double normalised = (val - minVal)/(double)maxVal;
+  double x = 0.0;
+  if(revert){
+    x = -(normalised*normalised) + 1;
+  } 
+  else {
+    x = normalised * normalised;  
+  }
 
+  
+  Serial.printf("Received power: %f, %f\n", normalised, x);
+  
+  if (x > 0.9){
+    return 255;
+  }
+  else if(x < 0.1){
+    return 100;
+  }
+  else {
+    return 155*x + 100;
+  }
+}
 
 
 
