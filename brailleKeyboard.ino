@@ -92,10 +92,10 @@ typedef struct {
 
 Magnet magnets[magnetsNumber];
 
-int forwardPins[] = {1,2,3,4,5,6};
-int backwardPins[] = {1,2,3,4,5,6};
-int powerPins[] = {1,2,3,4,5,6};
-int hallInputPins[] = {1,2,3,4,5,6};
+int forwardPins[] = {7,4,1,24,26,33};
+int backwardPins[] = {8,5,2,25,27,34};
+int powerPins[] = {9,6,3,29,30,35};
+int hallInputPins[] = {18,19,20,21,22,23};
 
 
 
