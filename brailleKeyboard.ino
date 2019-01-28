@@ -19,15 +19,57 @@ int totalPulseRepetitions = 1;
 int confirmationSinglePulseLength = 30;
 int confirmationPulseRepetitions = 3;
 
-int farVibrate = 150;
-int mediumVibrate = 200;
-int strongVibrate = 255;
-  
-int mode = 9; // 0 = reading
-              // 1 = writing
-              // 9 = setup
 
-const int magnetsNumber = 2;
+
+int signalPulses[3] = {1, 3, 4};
+int signalPulsesLength[3] = {400, 4, 25};
+
+
+int letters[26][6] = {
+  {1,0,0,0,0,0},
+  {1,1,0,0,0,0},
+  {1,0,0,1,0,0},
+  {1,0,0,1,1,0},
+  {1,0,0,0,1,0},
+  {1,1,0,1,0,0},
+  {1,1,0,1,1,0},
+  {1,1,0,0,1,0},
+  {0,1,0,1,0,0},
+  {0,1,0,1,1,0},
+  {1,0,1,0,0,0},
+  {1,1,1,0,0,0},
+  {1,0,1,1,0,0},
+  {1,0,1,1,1,0},
+  {1,0,1,0,1,0},
+  {1,1,1,1,0,0},
+  {1,1,1,1,1,0},
+  {1,1,1,0,1,0},
+  {0,1,1,1,0,0},
+  {0,1,1,1,1,0},
+  {1,0,1,0,0,1},
+  {1,1,1,0,0,1},
+  {0,1,0,1,1,1},
+  {1,0,1,1,0,1},
+  {1,0,1,1,1,1},
+  {1,0,1,0,1,1}
+};
+
+
+const int ESCSignal = 6;
+const int ConfirmationSignal = 5;
+const int PreReadingMode = 1;
+const int ReadingMode = 2;
+const int WritingMode = 0;
+const int SetUpMode = 9;
+
+
+
+int mode = SetUpMode;
+int signalType = 0;
+
+const int shift = 10;
+const int strongVibrate = 255;
+const int magnetsNumber = 6;
 
 typedef struct {
   int inputPin;
@@ -48,91 +90,90 @@ typedef struct {
   float repellingDirection;
 } Magnet;
 
-typedef struct {
-  Magnet m1;
-  Magnet m2;
-} Dot;
-
 Magnet magnets[magnetsNumber];
-Dot dots[6];
+
+int forwardPins[] = {1,2,3,4,5,6};
+int backwardPins[] = {1,2,3,4,5,6};
+int powerPins[] = {1,2,3,4,5,6};
+int hallInputPins[] = {1,2,3,4,5,6};
+
+
 
 // the setup routine runs once when you press reset:
 void setup() {
   // initialize serial communication at 9600 bits per second:
   Serial.begin(9600);
- 
-  Magnet m1;
-  Hall h1;
-  Magnet m2;
 
-  h1.inputPin = 31;
-    pinMode(h1.inputPin, INPUT);
-  h1.idleVal = analogRead(h1.inputPin);
-  m2.sensor = h1;
-  m1.forwardPin = 28;
-    pinMode(m1.forwardPin,OUTPUT);
-  m1.backwardPin = 27;
-    pinMode(m1.backwardPin,OUTPUT);
-  m1.powerPin = 29;
-    pinMode(m1.powerPin,OUTPUT);
-  m1.fieldDirection = 0.5;
+  for (int i = 0; i < magnetsNumber; i++){
+    Magnet m;
+    Hall h;
 
-  m2.forwardPin = 39;
-    pinMode(m2.forwardPin,OUTPUT);
-  m2.backwardPin = 38;
-    pinMode(m2.backwardPin,OUTPUT);
-  m2.powerPin = 23;
-    pinMode(m2.powerPin,OUTPUT);
-  m2.fieldDirection = 0.5;
-  m2.repellingDirection = 0.5;
-  m2.reseting = false;
-  m2.lastRun = millis();
-  m2.firstRun = millis();
-  m2.isRunning = false;
-  m2.overheated = false;
-  
-  magnets[0] = m1;
-  magnets[1] = m2;
+    h.inputPin = hallInputPins[i];
+    pinMode(h.inputPin, INPUT);
+    h.idleVal = analogRead(h.inputPin);
 
-  Dot d1;
-  d1.m1 = m1;
-  d1.m2 = m2;
-  dots[0] = d1;
+    m.forwardPin = forwardPins[i];
+    m.backwardPin = backwardPins[i];
+    m.powerPin = powerPins[i];
+
+    pinMode(m.forwardPin, OUTPUT);
+    pinMode(m.backwardPin, OUTPUT);
+    pinMode(m.powerPin, OUTPUT);
+
+    m.fieldDirection = 0.5;
+    m.repellingDirection = 0.5;
+    m.reseting = false;
+    m.lastRun = millis();
+    m.firstRun = millis();
+    m.isRunning = false;
+    m.overheated = false;
+
+    magnets[i] = m;
+  }
 }
+
+
+
+
 
 void loop() {
    int val = -1;
-   if(mode == 9){
-      if (Serial.available()){ // If data is available to read,
-       val = Serial.read(); // read it and store it in val
-       Serial.printf("Received: %d\n", val);
+   if (Serial.available()){ // If data is available to read,
+      val = Serial.read(); // read it and store it in val
+      Serial.printf("Received: %d\n", val);
+   }
+   if(mode == SetUpMode){
+      if (val == PreReadingMode){ // If 1 was receidved
+        mode = PreReadingMode;
+        Serial.write(ConfirmationSignal);
       }
-      if (val == 1){ // If 1 was receidved
-        mode = 1;
-      }
-      else if (val == 0){
-        mode = 0;
+      else if (val == WritingMode){
+        mode = WritingMode;
       }
       else {
         return;
       }
       Serial.print("waiting in mode: ");
-            Serial.println(mode);
-    delay(10); // Wait 10 milliseconds for next reading
+      Serial.println(mode);
+      delay(10); // Wait 10 milliseconds for next reading
    }
-   else if (mode == 0){
-      if (Serial.available()){ // If data is available to read,
-       val = Serial.read(); // read it and store it in val
-             Serial.printf("waiting in reading, got: %d\n", val);
-       handleReading(val);
+   else if(mode == PreReadingMode){
+    if (val > 0 && val < 10){
+      mode = ReadingMode;
+      signalType = val; 
+    }
+   }
+   else if (mode == ReadingMode){
+      if (val != -1){ // If data is available to read,
+        handleReading(val);
       }
-
       delay(10);
    }
-   else if (mode == 1){
+   else if (mode == WritingMode){
     handleWriting();
    }
 }
+
 
 
 
@@ -143,22 +184,30 @@ void loop() {
 // ================================================
 
 void handleReading(int letter){
-  pulseMagnet(1,255, magnets[1].repellingDirection, singlePulseLength, totalPulseRepetitions);
+  letter -= shift;
+  Serial.printf("Printing letter: %c: {", (letter + 'a') );
+  for (int i = 0; i < 6; i++){
+    Serial.printf("%d,", letters[letter-shift][i]);
+    if(letters[letter-shift][i] == 1){
+      pulseMagnet(i, 255, magnets[i].repellingDirection, signalPulsesLength[signalType], signalPulses[signalType]);
+    }
+  }
+  Serial.println("}");
 }
 
 void handleWriting(){
   handleInput(1, readHall(1));
 }
 
-void handleVibration(int magnet, int value){
-  int total = 0;
-  while(total < vibrationSetLength){
-    unsigned long StartTime = millis();
-    vibrateMagnet(magnet, value, singleVibrationLength, totalVibrationRepetitions);
-    unsigned long CurrentTime = millis();
-    total += (CurrentTime - StartTime);
-  }
-}
+//void handleVibration(int magnet, int value){
+//  int total = 0;
+//  while(total < vibrationSetLength){
+//    unsigned long StartTime = millis();
+//    vibrateMagnet(magnet, value, singleVibrationLength, totalVibrationRepetitions);
+//    unsigned long CurrentTime = millis();
+//    total += (CurrentTime - StartTime);
+//  }
+//}
 
 
 
@@ -172,6 +221,7 @@ void handleInput(int magnet, int reading){
   int base = magnets[magnet].sensor.idleVal;
   int diff = base - reading;
   diff = abs(diff);
+//  Serial.printf("Diff: %d\n", diff);
       
   if(diff < farReading){
     if(certain(magnet, 0, farReading)){
@@ -184,7 +234,6 @@ void handleInput(int magnet, int reading){
   else  if(diff < touchReading && !magnets[magnet].reseting){
     if(certain(magnet, strongReading, touchReading)){
       int power = getPower(diff, 0, 100, true);
-      Serial.printf("Power: %d\n", power);
       pulseMagnet(magnet, power, magnets[magnet].repellingDirection * -1, singlePulseLength, totalPulseRepetitions);
     }
   }
@@ -370,7 +419,7 @@ int getPower(int val,int minVal, int maxVal, bool revert){
   }
 
   
-  Serial.printf("Received power: %f, %f\n", normalised, x);
+//  Serial.printf("Received power: %f, %f\n", normalised, x);
   
   if (x > 0.9){
     return 255;
