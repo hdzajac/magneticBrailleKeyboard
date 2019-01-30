@@ -186,7 +186,7 @@ void loop() {
 void handleReading(int letter){
   letter -= shift;
   Serial.printf("Printing letter: %c: {", (letter + 'a') );
-  for (int i = 0; i < 6; i++){
+  for (int i = 0; i < magnetsNumber; i++){
     Serial.printf("%d,", letters[letter-shift][i]);
     if(letters[letter-shift][i] == 1){
       pulseMagnet(i, 255, magnets[i].repellingDirection, signalPulsesLength[signalType], signalPulses[signalType]);
@@ -196,7 +196,10 @@ void handleReading(int letter){
 }
 
 void handleWriting(){
-  handleInput(1, readHall(1));
+  for (int i = 0; i < magnetsNumber; i++){
+      handleInput(i, readHall(i));
+  }
+
 }
 
 //void handleVibration(int magnet, int value){
@@ -303,11 +306,17 @@ void driveMagnet(int magnet, int value){
         m->firstRun = millis();
       }
     }
+    
     digitalWrite(m->forwardPin, m->fieldDirection + 0.5 );
     digitalWrite(m->backwardPin, -m->fieldDirection + 0.5);
     analogWrite(m->powerPin, value);
   }
 }
+
+
+
+
+
 
 bool canRun(int magnet){
   Magnet *m = &magnets[magnet];
@@ -336,11 +345,6 @@ void stopMagnet(int magnet){
   }
 }
 
-
-
-
-
-
 bool certain (int magnet, int lower, int higher){
   bool result = true;
   for (int i = 0; i < consecutiveReadings; i++){
@@ -361,7 +365,6 @@ void updateIdleVal(int magnet){
 }
 
 
-
 void revertDirection(int magnet){
   if (magnet >= magnetsNumber){
     return;
@@ -378,6 +381,9 @@ void setDirection(int magnet, float dir){
   m->fieldDirection = dir;
 }
 
+
+
+
 // ================================================
 //   Reading Functions
 // ================================================
@@ -392,8 +398,6 @@ int readHall(int magnet){
     return 0;
   }
   int reading = analogRead(magnets[magnet].sensor.inputPin);
-//  Serial.print("Hall effect reading ");
-//  Serial.println(reading);
   return reading;
 }
 
@@ -416,11 +420,7 @@ int getPower(int val,int minVal, int maxVal, bool revert){
   } 
   else {
     x = normalised * normalised;  
-  }
-
-  
-//  Serial.printf("Received power: %f, %f\n", normalised, x);
-  
+  } 
   if (x > 0.9){
     return 255;
   }
