@@ -49,7 +49,7 @@ void draw()
            int intVal = (int)val;
            if (intVal == ConfirmationSignal){
              println("Choose the signal type: signal pulse 1 -> 3 Vibration");
-             mode = ReadingMode;
+             mode = PrepReadingMode;
            }
          }
          
@@ -91,6 +91,7 @@ void keyPressed() {
   else if(mode == PrepReadingMode){
     if (key < '3' && key > '1'){
       myPort.write(key - '0'); 
+      mode = ReadingMode;
     }
   }
   else if(mode == ReadingMode) {
@@ -120,7 +121,7 @@ void sendNextCharachter(){
         toSend = character - 'A' + shift;
       }
       if (toSend != 0){
-        println("Sending: %c", character);
+        println("Sending: " +(char) character);
         myPort.write(toSend);
       }
       else {

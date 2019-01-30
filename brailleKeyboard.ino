@@ -1,4 +1,4 @@
-#include <math.h>  
+#include <math.h>
 int idleReading = 536;
 int farReading = 5;
 int mediumReading = 10;
@@ -10,48 +10,46 @@ int maxWorkTime = 3000;
 int minTimeBetweenRuns = 300;
 int vibrationSetLength = 500;
 
-int singleVibrationLength = 4;
-int totalVibrationRepetitions = 3;
 
-int singlePulseLength = 400;
-int totalPulseRepetitions = 1;
 
-int confirmationSinglePulseLength = 30;
+
+int confirmationPulseLength = 30;
 int confirmationPulseRepetitions = 3;
+int confirmationRevert = false;
 
 
 
 int signalPulses[3] = {1, 3, 4};
 int signalPulsesLength[3] = {400, 4, 25};
-
+int revertPulses[3] = {false, true, true};
 
 int letters[26][6] = {
-  {1,0,0,0,0,0},
-  {1,1,0,0,0,0},
-  {1,0,0,1,0,0},
-  {1,0,0,1,1,0},
-  {1,0,0,0,1,0},
-  {1,1,0,1,0,0},
-  {1,1,0,1,1,0},
-  {1,1,0,0,1,0},
-  {0,1,0,1,0,0},
-  {0,1,0,1,1,0},
-  {1,0,1,0,0,0},
-  {1,1,1,0,0,0},
-  {1,0,1,1,0,0},
-  {1,0,1,1,1,0},
-  {1,0,1,0,1,0},
-  {1,1,1,1,0,0},
-  {1,1,1,1,1,0},
-  {1,1,1,0,1,0},
-  {0,1,1,1,0,0},
-  {0,1,1,1,1,0},
-  {1,0,1,0,0,1},
-  {1,1,1,0,0,1},
-  {0,1,0,1,1,1},
-  {1,0,1,1,0,1},
-  {1,0,1,1,1,1},
-  {1,0,1,0,1,1}
+  {1, 0, 0, 0, 0, 0},
+  {1, 1, 0, 0, 0, 0},
+  {1, 0, 0, 1, 0, 0},
+  {1, 0, 0, 1, 1, 0},
+  {1, 0, 0, 0, 1, 0},
+  {1, 1, 0, 1, 0, 0},
+  {1, 1, 0, 1, 1, 0},
+  {1, 1, 0, 0, 1, 0},
+  {0, 1, 0, 1, 0, 0},
+  {0, 1, 0, 1, 1, 0},
+  {1, 0, 1, 0, 0, 0},
+  {1, 1, 1, 0, 0, 0},
+  {1, 0, 1, 1, 0, 0},
+  {1, 0, 1, 1, 1, 0},
+  {1, 0, 1, 0, 1, 0},
+  {1, 1, 1, 1, 0, 0},
+  {1, 1, 1, 1, 1, 0},
+  {1, 1, 1, 0, 1, 0},
+  {0, 1, 1, 1, 0, 0},
+  {0, 1, 1, 1, 1, 0},
+  {1, 0, 1, 0, 0, 1},
+  {1, 1, 1, 0, 0, 1},
+  {0, 1, 0, 1, 1, 1},
+  {1, 0, 1, 1, 0, 1},
+  {1, 0, 1, 1, 1, 1},
+  {1, 0, 1, 0, 1, 1}
 };
 
 
@@ -79,7 +77,6 @@ typedef struct {
 typedef struct {
   int forwardPin;
   int backwardPin;
-  int powerPin;
   float fieldDirection;
   Hall sensor;
   unsigned long lastRun;
@@ -92,10 +89,9 @@ typedef struct {
 
 Magnet magnets[magnetsNumber];
 
-int forwardPins[] = {7,4,1,24,26,33};
-int backwardPins[] = {8,5,2,25,27,34};
-int powerPins[] = {9,6,3,29,30,35};
-int hallInputPins[] = {18,19,20,21,22,23};
+int forwardPins[] = {0, 2, 4, 6, 8, 10};
+int backwardPins[] = {1, 3, 5, 7, 9, 11};
+int hallInputPins[] = {A0, A1, A2, A3, A4, A5};
 
 
 
@@ -104,7 +100,7 @@ void setup() {
   // initialize serial communication at 9600 bits per second:
   Serial.begin(9600);
 
-  for (int i = 0; i < magnetsNumber; i++){
+  for (int i = 0; i < magnetsNumber; i++) {
     Magnet m;
     Hall h;
 
@@ -114,11 +110,9 @@ void setup() {
 
     m.forwardPin = forwardPins[i];
     m.backwardPin = backwardPins[i];
-    m.powerPin = powerPins[i];
 
     pinMode(m.forwardPin, OUTPUT);
     pinMode(m.backwardPin, OUTPUT);
-    pinMode(m.powerPin, OUTPUT);
 
     m.fieldDirection = 0.5;
     m.repellingDirection = 0.5;
@@ -137,41 +131,48 @@ void setup() {
 
 
 void loop() {
-   int val = -1;
-   if (Serial.available()){ // If data is available to read,
-      val = Serial.read(); // read it and store it in val
-      Serial.printf("Received: %d\n", val);
-   }
-   if(mode == SetUpMode){
-      if (val == PreReadingMode){ // If 1 was receidved
-        mode = PreReadingMode;
-        Serial.write(ConfirmationSignal);
+  int val = -1;
+  
+  if (Serial.available()) { // If data is available to read,
+    val = Serial.read(); // read it and store it in val
+  }
+  if (mode == SetUpMode) {
+    if (val == PreReadingMode) { // If 1 was receidved
+      mode = PreReadingMode;
+      for (int i = 0; i < magnetsNumber; i++) {
+        setDirection(i, magnets[i].repellingDirection );
       }
-      else if (val == WritingMode){
-        mode = WritingMode;
-      }
-      else {
-        return;
-      }
-      Serial.print("waiting in mode: ");
-      Serial.println(mode);
-      delay(10); // Wait 10 milliseconds for next reading
-   }
-   else if(mode == PreReadingMode){
-    if (val > 0 && val < 10){
+      Serial.write(ConfirmationSignal);
+    }
+    else if (val == WritingMode) {
+      mode = WritingMode;
+    }
+    else {
+      return;
+    }
+    Serial.print("waiting in mode: ");
+    Serial.println(mode);
+    delay(10); // Wait 10 milliseconds for next reading
+  }
+  else if (mode == PreReadingMode) {
+    if (val > 0 && val < 10) {
+      Serial.print("Reading mode, received signal pulse type: ");
+      Serial.println(val);
       mode = ReadingMode;
-      signalType = val; 
+      signalType = val;
     }
-   }
-   else if (mode == ReadingMode){
-      if (val != -1){ // If data is available to read,
-        handleReading(val);
-      }
-      delay(10);
-   }
-   else if (mode == WritingMode){
+  }
+  else if (mode == ReadingMode) {
+    if (val != -1) { // If data is available to read,
+      Serial.print("Reading mode, received char: ");
+      Serial.println((char)(val + 'a' - shift));
+      handleReading(val);
+    }
+    delay(10);
+  }
+  else if (mode == WritingMode) {
     handleWriting();
-   }
+  }
 }
 
 
@@ -180,136 +181,123 @@ void loop() {
 
 
 // ================================================
-//   Control fucntions
+//   Control fucntions = READING
 // ================================================
 
-void handleReading(int letter){
+void handleReading(int letter) {
   letter -= shift;
-  Serial.printf("Printing letter: %c: {", (letter + 'a') );
-  for (int i = 0; i < magnetsNumber; i++){
-    Serial.printf("%d,", letters[letter-shift][i]);
-    if(letters[letter-shift][i] == 1){
-      pulseMagnet(i, 255, magnets[i].repellingDirection, signalPulsesLength[signalType], signalPulses[signalType]);
+  Serial.print("Printing letter: ");
+  Serial.println((char) (letter + 'a'));
+  pulseMagnets(signalPulsesLength[signalType], signalPulses[signalType], revertPulses[signalType], letters[letter]);
+}
+
+
+// ================================================
+//   Control fucntions = WRITING
+// ================================================
+
+void handleWriting() {
+  int activeMagnets[6] = {0, 0, 0, 0, 0, 0};
+  int inputCompleteMagnets[6] = {0, 0, 0, 0, 0, 0};
+
+
+  for (int magnet = 0; magnet < magnetsNumber; magnet++) {
+    int reading = readHall(magnet);
+
+    int base = magnets[magnet].sensor.idleVal;
+    int diff = base - reading;
+    diff = abs(diff);
+
+    if (diff < farReading) {
+      if (certain(magnet, 0, farReading)) {
+        if (magnets[magnet].reseting) {
+          magnets[magnet].reseting = false;
+        }
+      }
+      continue;
     }
-  }
-  Serial.println("}");
-}
-
-void handleWriting(){
-  for (int i = 0; i < magnetsNumber; i++){
-      handleInput(i, readHall(i));
-  }
-
-}
-
-//void handleVibration(int magnet, int value){
-//  int total = 0;
-//  while(total < vibrationSetLength){
-//    unsigned long StartTime = millis();
-//    vibrateMagnet(magnet, value, singleVibrationLength, totalVibrationRepetitions);
-//    unsigned long CurrentTime = millis();
-//    total += (CurrentTime - StartTime);
-//  }
-//}
-
-
-
-// Deciding whether to apply feedback
-//
-void handleInput(int magnet, int reading){
-  if (magnet >= magnetsNumber){
-    error("index out of bound", "stopMagnet");
-    return;
-  }
-  int base = magnets[magnet].sensor.idleVal;
-  int diff = base - reading;
-  diff = abs(diff);
-//  Serial.printf("Diff: %d\n", diff);
-      
-  if(diff < farReading){
-    if(certain(magnet, 0, farReading)){
-      if(magnets[magnet].reseting){
-        magnets[magnet].reseting = false;
+    else  if (diff < touchReading && !magnets[magnet].reseting) {
+      if (certain(magnet, strongReading, touchReading)) {
+        activeMagnets[magnet] = 1;
       }
     }
-    return;
-  }
-  else  if(diff < touchReading && !magnets[magnet].reseting){
-    if(certain(magnet, strongReading, touchReading)){
-      int power = getPower(diff, 0, 100, true);
-      pulseMagnet(magnet, power, magnets[magnet].repellingDirection * -1, singlePulseLength, totalPulseRepetitions);
+    else {
+      if (!magnets[magnet].reseting) {
+        //        Serial.printf("%d 1 %lu\n", magnet, millis());
+        magnets[magnet].reseting = true;
+        inputCompleteMagnets[magnet] = 1;
+      }
     }
   }
-  else {
-    if (!magnets[magnet].reseting){
-      Serial.printf("%d 1 %lu\n", magnet, millis());
-      magnets[magnet].reseting = true;
-      pulseMagnet(magnet, strongVibrate, magnets[magnet].repellingDirection, confirmationSinglePulseLength, confirmationPulseRepetitions);
-    }
-  }
+
+  pulseMagnets(signalPulsesLength[signalType], signalPulses[signalType], revertPulses[signalType], activeMagnets);
+  pulseMagnets(confirmationPulseLength, confirmationPulseRepetitions, confirmationRevert, inputCompleteMagnets);
 }
 
+// ================================================
+//   Control fucntions = SENDING SIGNAL
+// ================================================
 
-
-
-
-void vibrateMagnet(int magnet, int value, int vibrationLength, int repetitions){
-  Magnet *m = &magnets[magnet];
-  for (int i = 0; i < repetitions; i++){
-    int pulse = 0;
-    while (pulse < vibrationLength){
-      unsigned long StartTime = millis();
-      driveMagnet(magnet, value);
-      unsigned long CurrentTime = millis();
-      pulse += CurrentTime - StartTime;
-    }
-    revertDirection(magnet);
-  }
-  stopMagnet(magnet);
-  delay(2);
-}
-
-void pulseMagnet(int magnet, int value, float dir, int pulseLength, int repetitions){
-  setDirection(magnet, dir);
+void pulseMagnets(int pulseLength, int repetitions, int revert, int *magnetsToRun) {
   unsigned long total = 0;
   int runPulse = 1;
   int alreadyStopped = false;
-  for(int i = 0; i < repetitions; i++){
+  Serial.print("vibrating: ");
+  Serial.println(revert);
+
+  for (int i = 0; i < repetitions; i++) {
     int pulse = 0;
-    while (pulse < pulseLength){
+
+    while (pulse < pulseLength) {
       unsigned long StartTime = millis();
-      if(runPulse == 1){
-        driveMagnet(magnet, value);
-        alreadyStopped = false;
-      }
-      else if (!alreadyStopped){
-        stopMagnet(magnet);
-        alreadyStopped = true;
+
+      for (int magnet = 0; magnet <  magnetsNumber; magnet++) {
+        if (magnetsToRun[magnet] == 1)
+        {
+          if (runPulse == 1) {
+            Serial.print("Driving magnet: ");
+            Serial.println(magnet);
+            driveMagnet(magnet);
+            alreadyStopped = false;
+          }
+          else if (!alreadyStopped) {
+            stopMagnet(magnet);
+            alreadyStopped = true;
+          }
+        }
       }
       unsigned long CurrentTime = millis();
       pulse += CurrentTime - StartTime;
     }
-    runPulse *= -1;
+    if (revert) {
+      for (int magnet = 0; magnet < magnetsNumber; magnet++) {
+        revertDirection(magnet);
+      }
+    }
+    else {
+      runPulse *= -1;
+    }
   }
-  stopMagnet(magnet);
+  for (int magnet = 0; magnet < magnetsNumber; magnet++) {
+    stopMagnet(magnet);
+  }
   delay(2);
 }
 
 
 
-void driveMagnet(int magnet, int value){
+void driveMagnet(int magnet) {
   Magnet* m = &magnets[magnet];
-  if(canRun(magnet)){
-    if(m->isRunning == false){
+  if (canRun(magnet)) {
+    if (m->isRunning == false) {
       m->isRunning = true;
-      if( (millis() - m->lastRun) > minTimeBetweenRuns){
+      if ( (millis() - m->lastRun) > minTimeBetweenRuns) {
         m->firstRun = millis();
       }
     }
-    
-    digitalWrite(m->forwardPin, m->fieldDirection + 0.5 );
+
+    digitalWrite(m->forwardPin, m->fieldDirection + 0.5);
     digitalWrite(m->backwardPin, -m->fieldDirection + 0.5);
-    analogWrite(m->powerPin, value);
   }
 }
 
@@ -317,27 +305,30 @@ void driveMagnet(int magnet, int value){
 
 
 
+// ================================================
+//   UTILS
+// ================================================
 
-bool canRun(int magnet){
+bool canRun(int magnet) {
   Magnet *m = &magnets[magnet];
-  if(m->overheated){
-    if ( millis() - m->lastRun > restTime){
+  if (m->overheated) {
+    if ( millis() - m->lastRun > restTime) {
       m->overheated = false;
       return true;
     }
     return false;
   }
-  if (m->isRunning && millis() - m->firstRun > maxWorkTime){
+  if (m->isRunning && millis() - m->firstRun > maxWorkTime) {
     m->overheated = true;
     stopMagnet(magnet);
     return false;
   }
-  return true;  
+  return true;
 }
 
-void stopMagnet(int magnet){
+void stopMagnet(int magnet) {
   Magnet *m = &magnets[magnet];
-  if(m->isRunning){
+  if (m->isRunning) {
     digitalWrite(m->forwardPin, 0 );
     digitalWrite(m->backwardPin, 0);
     m->lastRun = millis();
@@ -345,36 +336,36 @@ void stopMagnet(int magnet){
   }
 }
 
-bool certain (int magnet, int lower, int higher){
+bool certain (int magnet, int lower, int higher) {
   bool result = true;
-  for (int i = 0; i < consecutiveReadings; i++){
+  for (int i = 0; i < consecutiveReadings; i++) {
     int base = magnets[magnet].sensor.idleVal;
     int diff = base - analogRead(magnets[magnet].sensor.inputPin);
     diff = abs(diff);
-    if (diff < lower || diff > higher){
-      result = false;    
+    if (diff < lower || diff > higher) {
+      result = false;
     }
   }
- return result;
+  return result;
 }
 
 
-void updateIdleVal(int magnet){
+void updateIdleVal(int magnet) {
   Magnet *m = &magnets[magnet];
   m->sensor.idleVal = analogRead(m->sensor.inputPin);
 }
 
 
-void revertDirection(int magnet){
-  if (magnet >= magnetsNumber){
+void revertDirection(int magnet) {
+  if (magnet >= magnetsNumber) {
     return;
   }
   Magnet *m = &magnets[magnet];
   m->fieldDirection *= -1;
 }
 
-void setDirection(int magnet, float dir){
-  if (magnet >= magnetsNumber){
+void setDirection(int magnet, float dir) {
+  if (magnet >= magnetsNumber) {
     return;
   }
   Magnet *m = &magnets[magnet];
@@ -388,13 +379,8 @@ void setDirection(int magnet, float dir){
 //   Reading Functions
 // ================================================
 
-//int readField(int dot){
-//  return analogRead(dots[dot].sensorPin);
-//}
-
-
-int readHall(int magnet){
-  if (magnet >= magnetsNumber){
+int readHall(int magnet) {
+  if (magnet >= magnetsNumber) {
     return 0;
   }
   int reading = analogRead(magnets[magnet].sensor.inputPin);
@@ -402,34 +388,14 @@ int readHall(int magnet){
 }
 
 // ================================================
-//   UTILS
+//   WHATEV
 // ================================================
 
-void error(char *message, char *fun){
+void error(char *message, char *fun) {
   Serial.print("[Error] [");
   Serial.print(fun);
   Serial.print("]: ");
   Serial.println(message);
-}
-
-int getPower(int val,int minVal, int maxVal, bool revert){
-  double normalised = (val - minVal)/(double)maxVal;
-  double x = 0.0;
-  if(revert){
-    x = -(normalised*normalised) + 1;
-  } 
-  else {
-    x = normalised * normalised;  
-  } 
-  if (x > 0.9){
-    return 255;
-  }
-  else if(x < 0.1){
-    return 100;
-  }
-  else {
-    return 155*x + 100;
-  }
 }
 
 
