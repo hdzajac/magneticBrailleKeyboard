@@ -89,8 +89,8 @@ typedef struct {
 
 Magnet magnets[magnetsNumber];
 
-int forwardPins[] = {0, 2, 4, 6, 8, 10};
-int backwardPins[] = {1, 3, 5, 7, 9, 11};
+int forwardPins[] = {2, 4, 6, 8, 10, 12};
+int backwardPins[] = {1, 3, 5, 7, 9, 11, 13};
 int hallInputPins[] = {A0, A1, A2, A3, A4, A5};
 
 
@@ -132,47 +132,54 @@ void setup() {
 
 void loop() {
   int val = -1;
-  
-  if (Serial.available()) { // If data is available to read,
-    val = Serial.read(); // read it and store it in val
-  }
-  if (mode == SetUpMode) {
-    if (val == PreReadingMode) { // If 1 was receidved
-      mode = PreReadingMode;
-      for (int i = 0; i < magnetsNumber; i++) {
-        setDirection(i, magnets[i].repellingDirection );
-      }
-      Serial.write(ConfirmationSignal);
-    }
-    else if (val == WritingMode) {
-      mode = WritingMode;
-    }
-    else {
-      return;
-    }
-    Serial.print("waiting in mode: ");
-    Serial.println(mode);
-    delay(10); // Wait 10 milliseconds for next reading
-  }
-  else if (mode == PreReadingMode) {
-    if (val > 0 && val < 10) {
-      Serial.print("Reading mode, received signal pulse type: ");
-      Serial.println(val);
-      mode = ReadingMode;
-      signalType = val;
-    }
-  }
-  else if (mode == ReadingMode) {
-    if (val != -1) { // If data is available to read,
-      Serial.print("Reading mode, received char: ");
-      Serial.println((char)(val + 'a' - shift));
-      handleReading(val);
-    }
-    delay(10);
-  }
-  else if (mode == WritingMode) {
-    handleWriting();
-  }
+
+  digitalWrite(6, 1);
+
+  digitalWrite(7, 0);
+
+
+
+    
+//  if (Serial.available()) { // If data is available to read,
+//    val = Serial.read(); // read it and store it in val
+//  }
+//  if (mode == SetUpMode) {
+//    if (val == PreReadingMode) { // If 1 was receidved
+//      mode = PreReadingMode;
+//      for (int i = 0; i < magnetsNumber; i++) {
+//        setDirection(i, magnets[i].repellingDirection );
+//      }
+//      Serial.write(ConfirmationSignal);
+//    }
+//    else if (val == WritingMode) {
+//      mode = WritingMode;
+//    }
+//    else {
+//      return;
+//    }
+//    Serial.print("waiting in mode: ");
+//    Serial.println(mode);
+//    delay(10); // Wait 10 milliseconds for next reading
+//  }
+//  else if (mode == PreReadingMode) {
+//    if (val > 0 && val < 10) {
+//      Serial.print("Reading mode, received signal pulse type: ");
+//      Serial.println(val);
+//      mode = ReadingMode;
+//      signalType = val;
+//    }
+//  }
+//  else if (mode == ReadingMode) {
+//    if (val != -1) { // If data is available to read,
+//      Serial.print("Reading mode, received char: ");
+//      Serial.println((char)(val + 'a' - shift));
+//      handleReading(val);
+//    }
+//    delay(10);
+//  }
+//  else if (mode == WritingMode) {
+//    handleWriting();
+//  }
 }
 
 
@@ -255,8 +262,6 @@ void pulseMagnets(int pulseLength, int repetitions, int revert, int *magnetsToRu
         if (magnetsToRun[magnet] == 1)
         {
           if (runPulse == 1) {
-            Serial.print("Driving magnet: ");
-            Serial.println(magnet);
             driveMagnet(magnet);
             alreadyStopped = false;
           }
