@@ -2,7 +2,7 @@ import processing.serial.*;
 Serial myPort;
 BufferedReader reader;
 int character;
-char val;
+int val;
 String file1 = "file1.txt";
 int mode = 9; // 0 = reading letters from keyboard
 // 1 = prep - sending letters to keyboard
@@ -42,12 +42,11 @@ void draw()
 {
 
   if ( myPort.available() > 0) {  // If data is available,
-    val = myPort.readChar();         // read it and store it in val
+    val = myPort.read();         // read it and store it in val
     switch (mode) {
     case PrepReadingMode: 
       {
-        int intVal = (int)val;
-        if (intVal == ConfirmationSignal) {
+        if (val == ConfirmationSignal) {
           reader = createReader(file1);
           println("Choose the signal type: signal pulse 1 -> 3 Vibration");
           mode = PrepReadingMode;
@@ -56,6 +55,7 @@ void draw()
 
     case WritingMode: 
       {
+        print((char)val);
       }      
 
     case ReadingMode: 
@@ -66,7 +66,9 @@ void draw()
       {
       }
     }
-    print(val);
+    if(mode != WritingMode){
+      print(val);
+    }
   }
 }
 

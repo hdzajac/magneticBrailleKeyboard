@@ -1,6 +1,6 @@
 #include <math.h>
 int idleReading = 536;
-int farReading = 5;
+int farReading = 6;
 int mediumReading = 10;
 int strongReading = 25;
 int touchReading = 100;
@@ -113,9 +113,6 @@ void setup() {
     h.inputPin = hallInputPins[i];
     pinMode(h.inputPin, INPUT);
     h.idleVal = analogRead(h.inputPin);
-    Serial.print(h.inputPin);
-    Serial.print("idle val: ");
-    Serial.println(h.idleVal);
     m.sensor = h;
 
 
@@ -229,15 +226,20 @@ void handleReading(int letter) {
 
 void handleWriting() {
   int activeMagnets[6] = {0, 0, 0, 0, 0, 0};
+  int inputCompleteMagnets[6] = {0, 0, 0, 0, 0, 0};
   int activeMagnetsCounter = 0;
   int writing = 0;
-  int inputCompleteMagnets[6] = {0, 0, 0, 0, 0, 0};
+
   unsigned long startTime = 0;
   int timesUp = 0;
 
+  for (int i = 0; i < magnetsNumber; i++) {
+    magnets[i].reseting = false;
+  }
 
   while (!(activeMagnetsCounter == 0 && writing == 1) && timesUp == 0)
   {
+    int confirmationMagnets[6] = {0, 0, 0, 0, 0, 0};
     for (int magnet = 0; magnet < magnetsNumber; magnet++) {
       if (startTime != 0 && millis() - startTime > maxWritingLength) {
         timesUp = 1;
@@ -252,7 +254,6 @@ void handleWriting() {
       if (diff < farReading) {
         if (certain(magnet, 0, farReading)) {
           if (magnets[magnet].reseting) {
-            magnets[magnet].reseting = false;
             activeMagnetsCounter--;
           }
         }
@@ -275,16 +276,21 @@ void handleWriting() {
         if (!magnets[magnet].reseting) {
           //        Serial.printf("%d 1 %lu\n", magnet, millis());
           magnets[magnet].reseting = true;
+          Serial.println(magnet);
           inputCompleteMagnets[magnet] = 1;
+          confirmationMagnets[magnet] = 1;
         }
       }
     }
     if (writing == 1) {
-      pulseMagnets(signalPulsesLength[signalType], signalPulses[signalType], revertPulses[signalType], activeMagnets);
-      pulseMagnets(confirmationPulseLength, confirmationPulseRepetitions, confirmationRevert, inputCompleteMagnets);
+      pulseMagnets(signalPulsesLength[0], signalPulses[0], revertPulses[signalType], activeMagnets);
+      pulseMagnets(confirmationPulseLength, confirmationPulseRepetitions, confirmationRevert, confirmationMagnets);
     }
   }
-  Serial.print(getLetter(inputCompleteMagnets) + 'a');
+  int letter = getLetter(inputCompleteMagnets);
+  if (letter == -1) return;
+  Serial.println(" ");
+  Serial.print((char)(letter + 'a'));
 }
 
 // ================================================
@@ -314,12 +320,9 @@ void pulseMagnets(int pulseLength, int repetitions, int revert, int *magnetsToRu
         if (revert) {
           revertDirection(i);
         }
-        if (!revert && m->iteration % 2 == 1) {
-          continue;
-        }
-        else {
-          driveMagnet(i);
-        }
+
+        driveMagnet(i);
+
       }
       else if ((millis() - m->startTime) > pulseLength) {
         m->newPulse = true;
@@ -330,12 +333,9 @@ void pulseMagnets(int pulseLength, int repetitions, int revert, int *magnetsToRu
         }
       }
       else {
-        if (!revert && m->iteration % 2 == 1) {
-          continue;
-        }
-        else {
-          driveMagnet(i);
-        }
+
+        driveMagnet(i);
+
       }
     }
     i = (i + 1) % magnetsNumber;
@@ -448,6 +448,7 @@ int getLetter(int *dots) {
       return i;
     }
   }
+  return -1;
 }
 
 
