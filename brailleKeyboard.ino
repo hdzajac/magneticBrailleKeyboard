@@ -20,11 +20,21 @@ int confirmationRevert = false;
 
 
 
-int signalPulses[4] = {1, 1, 6, 4};
-int signalPulsesLength[4] = {400, 400, 35, 25};
+int signalPulses[5] = {1, 4, 8, 6 , 3};
+int signalPulsesLength[5] = {400, 12, 5, 36, 66};
 int revertPulses[3] = {false, true, true};
 
-int letters[26][6] = {
+int letters[36][6] = {
+  {1, 0, 0, 0, 0, 0},
+  {0, 1, 0, 0, 0, 0},
+  {0, 0, 1, 0, 0, 0},
+  {0, 0, 0, 1, 0, 0},
+  {0, 0, 0, 0, 1, 0},
+  {0, 0, 0, 0, 0, 1},
+  {1, 1, 0, 1, 1, 0},
+  {0, 1, 0, 0, 1, 0},
+  {0, 1, 0, 1, 0, 0},
+  {1, 0, 0, 0, 1, 0},
   {1, 0, 0, 0, 0, 0},
   {1, 1, 0, 0, 0, 0},
   {1, 0, 0, 1, 0, 0},
@@ -190,8 +200,6 @@ void loop() {
     }
     else if (mode == ReadingMode) {
       if (val != -2) { // If data is available to read,
-        Serial.print("Reading mode, received char: ");
-        Serial.println((char)(val + 'a' - shift));
         handleReading(val);
       }
       delay(10);
@@ -214,8 +222,13 @@ void loop() {
 
 void handleReading(int letter) {
   letter -= shift;
-  Serial.print("Printing letter: ");
-  Serial.println((char) (letter + 'a'));
+  Serial.print("Printing character: ");
+  if (letter > 9) {
+    Serial.println((char) (letter + 'a'));
+  }
+  else {
+    Serial.println((char) (letter + '0'));
+  }
   pulseMagnets(signalPulsesLength[signalType], signalPulses[signalType], revertPulses[signalType], letters[letter]);
 }
 
@@ -251,7 +264,7 @@ void handleWriting() {
       int base = magnets[magnet].sensor.idleVal;
       int diff = base - reading;
       diff = abs(diff);
-      
+
       if (diff < farReading) {
         if (certain(magnet, 0, farReading)) {
           if (magnets[magnet].reseting) {
@@ -277,7 +290,7 @@ void handleWriting() {
         if (!magnets[magnet].reseting) {
           //        Serial.printf("%d 1 %lu\n", magnet, millis());
           magnets[magnet].reseting = true;
-          
+
           inputCompleteMagnets[magnet] = 1;
           confirmationMagnets[magnet] = 1;
         }

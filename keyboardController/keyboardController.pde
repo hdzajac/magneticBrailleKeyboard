@@ -67,7 +67,7 @@ void draw()
       }
     }
     if(mode != WritingMode){
-      print(val);
+      print((char)val);
     }
   }
 }
